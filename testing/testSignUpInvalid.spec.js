@@ -1,0 +1,30 @@
+import { test, expect } from '@playwright/test';
+
+test('test', async ({ page }) => {
+  await page.goto('http://localhost:8000/welcome');
+  await page.waitForTimeout(1000);
+  await page.getByRole('link', { name: 'Sign in Now' }).click();
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Nomor Induk' }).click();
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Nomor Induk' }).fill('2341720989');
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Nama Lengkap' }).click();
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Nama Lengkap' }).fill('Michael Schumacher');
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Username' }).click();
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Username' }).fill('Schumi');
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Password', exact: true }).click();
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Password', exact: true }).fill('12345');
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Konfirmasi Password' }).click();
+  await page.waitForTimeout(1000);
+  await page.getByRole('textbox', { name: 'Konfirmasi Password' }).fill('12346');
+  await page.waitForTimeout(1000);
+  await page.getByRole('button', { name: 'Sign Up' }).click();
+  await page.waitForTimeout(1000);
+});

@@ -6,7 +6,6 @@ use App\Models\Kriteria;
 use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB;
 
 class KriteriaController extends Controller
 {
@@ -23,8 +22,8 @@ class KriteriaController extends Controller
 
         // eager load skoring for each kriteria
         $kriteria = Kriteria::with('skoringKriterias')->orderBy('kode_kriteria')->get();
-
-        return view('kriteria.index', compact('activeMenu', 'breadcrumbs', 'kriteria'));
+        $sumBobot = (float) $kriteria->sum('bobot_kriteria');
+        return view('kriteria.index', compact('activeMenu', 'breadcrumbs', 'kriteria', 'sumBobot'));
     }
 
     public function list()
@@ -56,70 +55,43 @@ class KriteriaController extends Controller
      */
     public function create()
     {
-        return view('kriteria.create');
+        $sumBobot = (float) Kriteria::sum('bobot_kriteria');
+        return view('kriteria.create', compact('sumBobot'));
     }
 
     /**
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-{
-    if ($request->ajax() || $request->wantsJson()) {
-        $validator = Validator::make(
-            $request->all(),
-            [
-                'kode_kriteria'  => 'required|string|max:10|unique:kriteria,kode_kriteria',
-                'nama_kriteria'  => 'required|string|max:100',
-                'bobot_kriteria' => 'required|numeric|min:0.01|max:1.00',
-                'tipe_kriteria'  => 'required|in:benefit,cost',
-                'deskripsi'      => 'nullable|string',
-            ],
-            [
-                'kode_kriteria.unique' => 'Kode kriteria sudah digunakan.',
-                'bobot_kriteria.max'   => 'Bobot kriteria tidak boleh lebih dari 1.00',
-                'bobot_kriteria.min'   => 'Bobot kriteria tidak boleh kurang dari 0.01',
-            ]
-        );
+    {
+        if ($request->ajax() || $request->wantsJson()) {
+            $validator = Validator::make(
+                $request->all(),
+                [
+                    'kode_kriteria'  => 'required|string|max:10|unique:kriteria,kode_kriteria',
+                    'nama_kriteria'  => 'required|string|max:100',
+                    'bobot_kriteria' => 'required|numeric',
+                    'tipe_kriteria'  => 'required|in:benefit,cost',
+                    'deskripsi'      => 'nullable|string',
+                ],
+                [
+                    'kode_kriteria.unique' => 'Kode kriteria sudah digunakan.',
+                ]
+            );
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Validasi gagal.',
-                'msgField' => $validator->errors()
-            ]);
-        }
-
-        DB::beginTransaction();
-        try {
-            // Simpan data baru
-            $baru = Kriteria::create($request->only([
-                'kode_kriteria', 'nama_kriteria', 'bobot_kriteria', 'tipe_kriteria', 'deskripsi'
-            ]));
-
-            // Ambil semua kriteria termasuk yang baru
-            $kriterias = Kriteria::all();
-            $totalBobot = $kriterias->sum('bobot_kriteria');
-
-            if ($totalBobot > 0) {
-                foreach ($kriterias as $k) {
-                    $bobotBaru = ($k->bobot_kriteria / $totalBobot) * 1.00;
-                    $k->bobot_kriteria = round($bobotBaru, 4);
-                    $k->save();
-                }
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validasi gagal.',
+                    'msgField' => $validator->errors()
+                ]);
             }
 
-            DB::commit();
-            return response()->json(['status' => true, 'message' => 'Kriteria berhasil ditambahkan dan bobot disesuaikan.']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'status' => false,
-                'message' => 'Gagal menambahkan kriteria: ' . $e->getMessage()
-            ]);
+            Kriteria::create($request->only(['kode_kriteria', 'nama_kriteria', 'bobot_kriteria', 'tipe_kriteria', 'deskripsi']));
+            return response()->json(['status' => true, 'message' => 'Kriteria berhasil ditambahkan']);
         }
+        return redirect('/');
     }
-    return redirect('/');
-}
 
     /**
      * Show the form for editing the specified resource.
@@ -128,6 +100,13 @@ class KriteriaController extends Controller
     {
         $kriteria = Kriteria::find($id);
         return view('kriteria.edit', compact('kriteria'));
+    }
+
+    // KriteriaController.php
+    public function cekTotalBobot($id = null)
+    {
+        $bobotLain = Kriteria::where('id_kriteria', '!=', $id)->sum('bobot_kriteria');
+        return response()->json(['bobotLain' => (float) $bobotLain]);
     }
 
     /**
@@ -139,13 +118,11 @@ class KriteriaController extends Controller
             $validator = Validator::make($request->all(), [
                 'kode_kriteria'  => 'required|string|max:10|unique:kriteria,kode_kriteria,' . $id . ',id_kriteria',
                 'nama_kriteria'  => 'required|string|max:100',
-                'bobot_kriteria' => 'required|numeric|min:0.01|max:1.00',
+                'bobot_kriteria' => 'required|numeric',
                 'tipe_kriteria'  => 'required|in:benefit,cost',
                 'deskripsi'      => 'nullable|string',
             ], [
                 'kode_kriteria.unique' => 'Kode kriteria sudah digunakan.',
-                'bobot_kriteria.max'   => 'Bobot kriteria tidak boleh lebih dari 1.00',
-                'bobot_kriteria.min'   => 'Bobot kriteria tidak boleh kurang dari 0.01',
             ]);
 
             if ($validator->fails()) {
@@ -156,58 +133,8 @@ class KriteriaController extends Controller
                 ]);
             }
 
-            $newBobot = (float) $request->bobot_kriteria;
-
-            DB::beginTransaction();
-            try {
-                // Ambil semua kriteria selain yang sedang diupdate
-                $kriteriaLain = Kriteria::where('id_kriteria', '!=', $id)->get();
-                $totalBobotLain = $kriteriaLain->sum('bobot_kriteria');
-
-                $sisaBobot = 1.00 - $newBobot;
-
-                if ($kriteriaLain->count() > 0) {
-                    if ($sisaBobot <= 0) {
-                        // Jika bobot baru sudah >= 1.00, maka lainnya semua jadi 0
-                        foreach ($kriteriaLain as $k) {
-                            $k->bobot_kriteria = 0;
-                            $k->save();
-                        }
-                    } elseif ($totalBobotLain == 0) {
-                        // Jika total bobot lain 0 (semua 0 sebelumnya), bagi rata saja
-                        $rata = $sisaBobot / $kriteriaLain->count();
-                        foreach ($kriteriaLain as $k) {
-                            $k->bobot_kriteria = round($rata, 4);
-                            $k->save();
-                        }
-                    } else {
-                        // Sesuaikan proporsional terhadap sisaBobot
-                        foreach ($kriteriaLain as $k) {
-                            $bobotBaru = ($k->bobot_kriteria / $totalBobotLain) * $sisaBobot;
-                            $k->bobot_kriteria = round($bobotBaru, 4);
-                            $k->save();
-                        }
-                    }
-                }
-
-                // Update kriteria yang sedang diedit
-                Kriteria::find($id)->update($request->only([
-                    'kode_kriteria',
-                    'nama_kriteria',
-                    'bobot_kriteria',
-                    'tipe_kriteria',
-                    'deskripsi'
-                ]));
-
-                DB::commit();
-                return response()->json(['status' => true, 'message' => 'Kriteria berhasil diubah dan bobot disesuaikan.']);
-            } catch (\Exception $e) {
-                DB::rollBack();
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Terjadi kesalahan saat mengubah kriteria: ' . $e->getMessage()
-                ]);
-            }
+            Kriteria::find($id)->update($request->only(['kode_kriteria', 'nama_kriteria', 'bobot_kriteria', 'tipe_kriteria', 'deskripsi']));
+            return response()->json(['status' => true, 'message' => 'Kriteria berhasil diubah']);
         }
         return redirect('/');
     }
@@ -224,38 +151,12 @@ class KriteriaController extends Controller
     public function destroy(Request $request, $id)
     {
         if ($request->ajax() || $request->wantsJson()) {
-        DB::beginTransaction();
-        try {
-            $deleted = Kriteria::findOrFail($id);
-            $deletedBobot = $deleted->bobot_kriteria;
-
-            // Hapus data
-            $deleted->delete();
-
-            // Ambil sisa kriteria
-            $kriteriaSisa = Kriteria::all();
-            $totalBobotSisa = $kriteriaSisa->sum('bobot_kriteria');
-
-            if ($kriteriaSisa->count() > 0) {
-                // Total bobot setelah penghapusan harus disesuaikan ke 1.00
-                foreach ($kriteriaSisa as $k) {
-                    // Bagi proporsional dari total sisa
-                    $bobotBaru = ($k->bobot_kriteria / $totalBobotSisa) * 1.00;
-                    $k->bobot_kriteria = round($bobotBaru, 4);
-                    $k->save();
-                }
-            }
-
-            DB::commit();
-            return response()->json(['status' => true, 'message' => 'Kriteria berhasil dihapus dan bobot disesuaikan.']);
-        } catch (\Exception $e) {
-            DB::rollBack();
+            Kriteria::destroy($id);
             return response()->json([
-                'status' => false,
-                'message' => 'Gagal menghapus kriteria: ' . $e->getMessage(),
+                'status' => true,
+                'message' => 'Kriteria berhasil dihapus'
             ]);
         }
-    }
         return redirect('/');
     }
 }

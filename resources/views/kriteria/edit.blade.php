@@ -62,6 +62,35 @@
 </div>
 
 <script>
+    function simpanFormKriteria(form) {
+        $.ajax({
+            url: form.action,
+            type: form.method,
+            data: $(form).serialize(),
+            success: function(response) {
+                if (response.status) {
+                    $('#myModal').modal('hide');
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil',
+                        text: response.message
+                    });
+                    tableKriteria.ajax.reload(); // reload tabel utama
+                } else {
+                    $('.error-text').text('');
+                    $.each(response.msgField, function(prefix, val) {
+                        $('#error-' + prefix).text(val[0]);
+                    });
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Terjadi Kesalahan',
+                        text: Object.values(response.msgField)[0][0]
+                    });
+                }
+            }
+        });
+    }
+
     $(document).ready(function() {
         $('#form-edit-kriteria').validate({
             rules: {
@@ -99,36 +128,32 @@
                 }
             },
             submitHandler: function(form) {
-                $.ajax({
-                    url: form.action,
-                    type: form.method,
-                    data: $(form).serialize(),
-                    success: function(response) {
-                        if (response.status) {
-                            $('#myModal').modal('hide');
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Berhasil',
-                                text: response.message
-                            });
-                            tableKriteria.ajax.reload();
-                        } else {
-                            $('.error-text').text('');
-                            $.each(response.msgField, function(prefix, val) {
-                                $('#error-' + prefix).text(val[0]);
-                            });
-                            let msgErr = Object.values(response.msgField)[0][0];
-                            console.log(msgErr);
-                            
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Terjadi Kesalahan',
-                                text: msgErr
-                            });
-                        }
+                let idKriteria = '{{ $kriteria->id_kriteria }}';
+                let bobotBaru = parseFloat($('[name="bobot_kriteria"]').val());
+
+                $.get("{{ route('kriteria.cekBobot', '') }}/" + idKriteria, function(response) {
+                    let totalBobot = response.bobotLain + bobotBaru;
+                    totalBobot = parseFloat(totalBobot.toFixed(2));
+
+                    if (totalBobot !== 1.00) {
+                        Swal.fire({
+                            title: 'Total Bobot Tidak Sama Dengan 1.00',
+                            html: `Total bobot setelah edit adalah <strong>${totalBobot}</strong>. Tetap lanjutkan penyimpanan?`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Ya, Simpan',
+                            cancelButtonText: 'Batal',
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                simpanFormKriteria(form);
+                            }
+                        });
+                    } else {
+                        simpanFormKriteria(form);
                     }
                 });
-                return false;
+
+                return false; // tetap dicegah submit default
             },
             errorElement: 'span',
             errorPlacement: function(error, element) {

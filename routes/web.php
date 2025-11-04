@@ -298,6 +298,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/create', [KriteriaController::class, 'create'])->name('kriteria.create');
             Route::post('/store', [KriteriaController::class, 'store'])->name('kriteria.store');
             Route::get('/edit/{id}', [KriteriaController::class, 'edit'])->name('kriteria.edit');
+            Route::get('/kriteria/cek-total-bobot/{id?}', [KriteriaController::class, 'cekTotalBobot'])->name('kriteria.cekBobot');
             Route::put('/update/{id}', [KriteriaController::class, 'update'])->name('kriteria.update');
             Route::get('/delete/{id}', [KriteriaController::class, 'confirm'])->name('kriteria.confirm');
             Route::delete('/destroy/{id}', [KriteriaController::class, 'destroy'])->name('kriteria.destroy');
